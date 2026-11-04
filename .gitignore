@@ -1,0 +1,8 @@
+node_modules/
+coverage/
+*.tsbuildinfo
+secrets.txt
+.pi/agent/secrets.txt
+
+.DS_Store
+.pi/
