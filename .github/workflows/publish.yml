@@ -1,0 +1,48 @@
+name: Publish plugins
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - '*@[0-9]+.[0-9]+.[0-9]+'
+
+# Configure npm trusted publishing for this repository/workflow; no npm token is used.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - name: Verify before publishing
+        run: npm run typecheck && npm run lint --if-present && npm test
+      # Trusted publishing requires a current npm CLI (11.5.1+).
+      - run: npm install --global npm@latest
+      - name: Publish packages matching the version tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          matched=0
+          for manifest in plugins/*/package.json; do
+            name=$(node -p "require('./${manifest}').name")
+            version=$(node -p "require('./${manifest}').version")
+            if [[ "$RELEASE_TAG" == "${name}@${version}" || "$RELEASE_TAG" == "v${version}" ]]; then
+              echo "Publishing ${name}@${version}"
+              npm publish --provenance --access public --workspace "$name"
+              matched=1
+            fi
+          done
+          if [[ "$matched" -eq 0 ]]; then
+            echo "No plugin version matches tag ${RELEASE_TAG}" >&2
+            exit 1
+          fi
